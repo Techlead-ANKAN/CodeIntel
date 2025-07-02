@@ -32,6 +32,15 @@ const TECH_SIGNATURES = {
     solid: ["solid-js"],
     preact: ["preact"],
   },
+  backend: {
+    node: ["node", "express", "koa", "nest", "fastify", "hapi"],
+    django: ["django", "csrfmiddlewaretoken", "csrftoken"],
+    rails: ["rails", "ruby"],
+    laravel: ["laravel", "php"],
+    flask: ["flask", "werkzeug"],
+    aspnet: ["asp.net", "__viewstate", "__eventvalidation"],
+    php: ["php", "x-powered-by: php"],
+  },
   styles: {
     tailwind: [
       "tailwind",
@@ -50,6 +59,26 @@ const TECH_SIGNATURES = {
     bulma: ["bulma"],
     chakra: ["chakra"],
     styled: ["styled-components"],
+    sass: ["sass", "scss"],
+  },
+  cms: {
+    wordpress: ["wp-content", "wp-includes", "wordpress", "wp-json"],
+    drupal: ["drupal", "sites/all"],
+    joomla: ["joomla", "media/jui"],
+    shopify: ["shopify", "cdn.shopify.com"],
+    magento: ["magento", "magento_version"],
+  },
+  databases: {
+    mongodb: ["mongodb"],
+    mysql: ["mysql"],
+    postgres: ["postgres"],
+    redis: ["redis"],
+  },
+  tools: {
+    google_analytics: ["google-analytics", "ga.js", "gtag.js", "analytics.js"],
+    google_tag_manager: ["googletagmanager", "gtm.js"],
+    hotjar: ["hotjar"],
+    sentry: ["sentry"],
   },
 };
 
@@ -69,6 +98,10 @@ function detectFrameworkPatterns(root) {
     svelte: root.querySelector("[data-svelte]"),
     alpine: root.querySelector("[x-data]"),
     astro: root.querySelector("astro-island"),
+    // CMS patterns
+    wordpress: root.querySelector('link[href*="wp-content"]'),
+    drupal: root.querySelector('link[href*="sites/default/files"]'),
+    shopify: root.querySelector('link[href*="cdn.shopify.com"]'),
   };
 
   return Object.entries(patterns)
@@ -76,7 +109,7 @@ function detectFrameworkPatterns(root) {
     .map(([framework]) => framework);
 }
 
-// Detect class patterns for CSS frameworks
+// Enhanced CSS framework detection
 function detectCssFrameworks(root) {
   const classes = root.querySelector("*")?.classList?.toString() || "";
   const frameworks = [];
@@ -104,17 +137,48 @@ function detectCssFrameworks(root) {
     frameworks.push("bootstrap");
   }
 
+  // Material Design detection
+  if (
+    classes.includes("mdl-") ||
+    classes.includes("mdc-") ||
+    classes.includes("mat-")
+  ) {
+    frameworks.push("material");
+  }
+
+  // Bulma detection
+  if (classes.includes("section") && classes.includes("container")) {
+    frameworks.push("bulma");
+  }
+
+  // Chakra UI detection
+  if (classes.includes("css-") && classes.includes("chakra")) {
+    frameworks.push("chakra");
+  }
+
   return frameworks;
 }
 
-// Detect technology usage
+// Helper function to safely get header values
+function getHeaderValue(headers, key) {
+  const value = headers[key];
+  if (Array.isArray(value)) {
+    return value.join(", ").toLowerCase();
+  }
+  return value ? value.toLowerCase() : "";
+}
+
+// Detect technologies from content and headers
 function detectTechnologies(html, headers) {
   const result = {
     frontend: [],
     backend: [],
     styles: [],
-    meta: {},
+    cms: [],
+    databases: [],
+    tools: [],
     security: [],
+    meta: {},
   };
 
   const content = html.toLowerCase();
@@ -126,39 +190,40 @@ function detectTechnologies(html, headers) {
   // Detect CSS frameworks by class patterns
   result.styles.push(...detectCssFrameworks(root));
 
-  // Special detection for Next.js
-  if (!result.frontend.includes("next")) {
-    // Check for Next.js specific paths
-    if (content.includes("_next/static") || content.includes("_next/data")) {
-      result.frontend.push("next");
-    }
-
-    // Check for NextScript components
-    if (html.includes("next/script")) {
-      result.frontend.push("next");
+  // Detect technologies by signature patterns
+  for (const [category, techs] of Object.entries(TECH_SIGNATURES)) {
+    for (const [tech, signatures] of Object.entries(techs)) {
+      if (signatures.some((sig) => content.includes(sig.toLowerCase()))) {
+        if (!result[category].includes(tech)) {
+          result[category].push(tech);
+        }
+      }
     }
   }
 
-  // Special detection for React
-  if (!result.frontend.includes("react")) {
-    // React component patterns
-    const reactComponents = root.querySelectorAll(
-      '[class*="component"], [class*="Component"]'
-    );
+  // Get header values safely
+  const serverHeader = getHeaderValue(headers, "server");
+  const poweredByHeader = getHeaderValue(headers, "x-powered-by");
+  const contentTypeHeader = getHeaderValue(headers, "content-type");
 
-    // React hook patterns
-    const reactHooks = root.querySelectorAll(
-      'script[src*="react-hooks"], script[src*="useState"]'
-    );
-
-    if (reactComponents.length > 2 || reactHooks.length > 0) {
-      result.frontend.push("react");
-    }
+  // Detect backend from headers
+  if (serverHeader) {
+    if (serverHeader.includes("apache")) result.backend.push("apache");
+    if (serverHeader.includes("nginx")) result.backend.push("nginx");
+    if (serverHeader.includes("iis")) result.backend.push("iis");
+    if (serverHeader.includes("cloudflare")) result.backend.push("cloudflare");
   }
 
-  // Detect Vercel hosting
-  if (headers["x-vercel-id"] || headers["server"] === "Vercel") {
-    result.backend.push("vercel");
+  if (poweredByHeader) {
+    if (poweredByHeader.includes("php")) result.backend.push("php");
+    if (poweredByHeader.includes("express")) result.backend.push("node");
+    if (poweredByHeader.includes("asp.net")) result.backend.push("aspnet");
+    if (poweredByHeader.includes("rails")) result.backend.push("rails");
+  }
+
+  // Detect backend from content type
+  if (contentTypeHeader.includes("php")) {
+    result.backend.push("php");
   }
 
   // Detect security headers
@@ -167,11 +232,24 @@ function detectTechnologies(html, headers) {
     result.security.push("nosniff");
   if (headers["x-frame-options"]) result.security.push("x-frame-options");
   if (headers["x-xss-protection"]) result.security.push("xss-protection");
+  if (headers["content-security-policy"]) result.security.push("csp");
 
-  // Detect languages from html lang attribute
-  const langAttr = root.querySelector("html")?.getAttribute("lang");
-  if (langAttr) {
-    result.languages = [langAttr];
+  // Detect cookies for backend tech - FIXED
+  if (headers["set-cookie"]) {
+    let cookieHeader = headers["set-cookie"];
+
+    // Handle both string and array formats
+    if (Array.isArray(cookieHeader)) {
+      cookieHeader = cookieHeader.join("; ").toLowerCase();
+    } else {
+      cookieHeader = cookieHeader.toLowerCase();
+    }
+
+    if (cookieHeader.includes("csrftoken")) result.backend.push("django");
+    if (cookieHeader.includes("laravel_session"))
+      result.backend.push("laravel");
+    if (cookieHeader.includes("wordpress_logged_in"))
+      result.cms.push("wordpress");
   }
 
   return result;
@@ -195,6 +273,7 @@ export async function detectFromWebsite(url) {
           "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8",
         "Accept-Language": "en-US,en;q=0.5",
       },
+      validateStatus: (status) => status < 500, // Accept 4xx as valid response
     });
 
     const html = response.data;
