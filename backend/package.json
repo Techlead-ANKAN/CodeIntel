@@ -1,0 +1,26 @@
+{
+  "name": "backend",
+  "version": "1.0.0",
+  "description": "codeIntel is a Node.js API that detects the tech stack used in any public GitHub repository. It analyzes common files like package.json, requirements.txt, and others to identify frontend frameworks, backend technologies, styling libraries, and programming languages.",
+  "keywords": [
+    "backend",
+    "api",
+    "code",
+    "techstack"
+  ],
+  "homepage": "https://github.com/Techlead-ANKAN/CodeIntel#readme",
+  "bugs": {
+    "url": "https://github.com/Techlead-ANKAN/CodeIntel/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Techlead-ANKAN/CodeIntel.git"
+  },
+  "license": "ISC",
+  "author": "Ankan Maity",
+  "type": "module",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  }
+}
