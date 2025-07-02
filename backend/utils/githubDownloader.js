@@ -11,14 +11,33 @@ export async function downloadAndExtractRepo(repoUrl) {
   const tempDir = path.join(os.tmpdir(), "codeintel-" + uuidv4());
   await fs.mkdir(tempDir, { recursive: true });
 
-  // Use git clone for simplicity (can add zip download fallback if needed)
-  const repoName = repoUrl.split("/").pop().replace(/\.git$/, "");
-  const cloneCmd = `git clone --depth=1 ${repoUrl} "${tempDir}"`;
+  // Extract repo name from URL
+  const repoMatch = repoUrl.match(/github\.com[:\/]([^\/]+\/[^\/]+?)(\.git)?$/);
+  if (!repoMatch || !repoMatch[1]) {
+    throw new Error("Invalid GitHub repository URL format");
+  }
+
+  const repoName = repoMatch[1];
+  const cloneUrl = `https://github.com/${repoName}.git`;
+  const cloneCmd = `git clone --depth=1 ${cloneUrl} "${tempDir}"`;
 
   try {
-    await execAsync(cloneCmd, { timeout: 60000 });
+    await execAsync(cloneCmd, { timeout: 90000 }); // 90 seconds timeout
     return tempDir;
   } catch (err) {
-    throw new Error("Failed to clone repository: " + err.message);
+    // Cleanup on failure
+    await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+
+    console.error("GIT ERROR:", err.stderr || err.message);
+
+    if (err.code === 128) {
+      throw new Error("Repository not found or access denied");
+    } else if (err.killed) {
+      throw new Error("Clone operation timed out");
+    } else {
+      throw new Error(
+        "Failed to clone repository: " + (err.stderr || err.message)
+      );
+    }
   }
 }
